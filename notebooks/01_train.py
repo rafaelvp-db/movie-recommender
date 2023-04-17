@@ -16,15 +16,16 @@ df.head()
 
 df_clean = df.dropna(subset = "extract")
 df_clean["extract"] = df_clean["extract"].str.lower()
-df_clean["actors_str"] = df_clean["cast"].apply(lambda x: "[SEP]".join([actor.lower() for actor in x]))
-df_clean["genres_str"] = df_clean["genres"].apply(lambda x: "[SEP]".join([genre.lower() for genre in x]))
-df_clean["full_desc"] = df_clean["year"].astype(str) + "[SEP]" + df_clean["genres_str"] + "[SEP]" + df_clean["extract"] #+ df_clean["actors_str"]
+df_clean["title"] = df_clean["title"].str.lower()
+df_clean["actors_str"] = df_clean["cast"].apply(lambda x: " ".join([actor.lower() for actor in x]))
+df_clean["genres_str"] = df_clean["genres"].apply(lambda x: " ".join([genre.lower() for genre in x]))
+df_clean["full_desc"] = df_clean["title"] + "[SEP]" + df_clean["year"].astype(str) + "[SEP]" + df_clean["genres_str"] + "[SEP]" + df_clean["actors_str"] #+ "[SEP]" + df_clean["extract"] #+ 
 df_clean.sample(5).full_desc
 
 # COMMAND ----------
 
 batman_df = df_clean[(df_clean.extract.str.contains("batman")) & (df_clean.year > 1980)]
-batman_df
+batman_df.head()
 
 # COMMAND ----------
 
@@ -41,13 +42,13 @@ movie_embeddings = embedder.encode(sample_extracts, convert_to_tensor = True)
 batman_extract = batman_df[(batman_df.year == 2022)].full_desc.values[0]
 query_embedding = embedder.encode(batman_extract, convert_to_tensor = True)
 
-top_k = 5
+top_k = 10
 
 cos_scores = util.cos_sim(query_embedding, movie_embeddings)[0]
 top_results = torch.topk(cos_scores, k = top_k)
 
 for score, idx in zip(top_results[0], top_results[1]):
-  print(f"### Score: {score}\n### Extract: {sample_extracts[idx]}")
+  print(f"### Movie: {sample_extracts[idx].split('[SEP]')[:3]} ---> Score: {score}")
 
 # COMMAND ----------
 
