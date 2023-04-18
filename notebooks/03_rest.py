@@ -217,4 +217,6 @@ display(expanded_df)
 # COMMAND ----------
 
 # DBTITLE 1,Visualizing Most Popular Queries
+# Create visualization grouping by search_query
+
 display(expanded_df)
