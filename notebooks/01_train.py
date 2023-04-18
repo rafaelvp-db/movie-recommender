@@ -125,7 +125,6 @@ def plot_thumbnails(
 ):
 
     images = []
-
     recommendations = recommendations.sort_values("score", ascending = False)
     thumbnails = recommendations.thumbnail.values
     titles = recommendations.title.values
