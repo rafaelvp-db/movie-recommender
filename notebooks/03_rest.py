@@ -153,17 +153,68 @@ print("Reponse text:", json.dumps(response.json()["predictions"]))
 
 # COMMAND ----------
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, functions as F
+
 spark = SparkSession.builder.getOrCreate()
 df = spark.sql(f"select * from delta.`{dbfs_table_path}/{endpoint_name}` limit 1000")
 display(df)
 
 # COMMAND ----------
 
-from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    ArrayType,
+    StringType,
+    IntegerType,
+    DoubleType
+)
 
-display(df_exploded.withColumn("query", ))
+def expand_column(df, parent_column, child_field, schema):
+
+    expanded_df = df.withColumn(f"{parent_column}_", F.from_json(F.col(parent_column), schema = schema))
+    expanded_df = expanded_df \
+        .select(f"{parent_column}_.{child_field}", "*") \
+        .withColumn(child_field, F.col(f"{parent_column}_.{child_field}").getItem(0))
+    expanded_df = expanded_df.select(f"{child_field}.*", "*")
+
+    return expanded_df
+
+
+def expand_df(df):
+
+    element_request = StructType([
+        StructField('search_query', StringType(), True)
+    ])
+
+    element_response = StructType([
+        StructField('title', StringType(), True),
+        StructField('extract', StringType(), True),
+        StructField('thumbnail', StringType(), True),
+        StructField('year', IntegerType(), True),
+        StructField('score', DoubleType(), True),
+    ])
+
+    schema_request = StructType([
+        StructField('instances', ArrayType(elementType = element_request), nullable = False)
+    ])
+
+    schema_response = StructType([
+        StructField('predictions', ArrayType(elementType = element_response), nullable = False)
+    ])
+
+    expanded_df = expand_column(df, "request", "instances", schema = schema_request)
+    expanded_df = expand_column(expanded_df, "response", "predictions", schema = schema_response)
+
+    return expanded_df
 
 # COMMAND ----------
 
+# DBTITLE 1,Visualizing Most Recommended Years
+expanded_df = expand_df(df)
+display(expanded_df)
 
+# COMMAND ----------
+
+# DBTITLE 1,Visualizing Most Popular Queries
+display(expanded_df)
