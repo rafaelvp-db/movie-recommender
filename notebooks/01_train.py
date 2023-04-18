@@ -147,10 +147,94 @@ def plot_thumbnails(
     
     fig.suptitle(f"Recommendations for {search_term}")
 
-search_term = "taxi driver"
+
+search_term = "batman"
 target_embedding = find_top_match(movie_embeddings, search_term = search_term)
 recommendations = get_recommendations(movie_embeddings, search_embedding = target_embedding)
 plot_thumbnails(search_term = search_term, recommendations = recommendations)
+
+# COMMAND ----------
+
+# DBTITLE 1,Register MLflow Model
+import mlflow
+import torch
+import json
+from sentence_transformers import SentenceTransformer
+
+class MovieRecommendationModel(mlflow.pyfunc.PythonModel):
+    def load_context(self, context):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = SentenceTransformer('all-MiniLM-L6-v2', device = device)
+        self.movies_embeddings = torch.load(context.artifacts["movies_embeddings"])
+        self.movies_df = pd.read_json(context.artifacts["movies_df"])
+    
+    def _get_best_match(self, search_query: str):
+
+        query_embedding = self.model.encode(search_query)
+        cos_scores = util.cos_sim(query_embedding, self.movies_embeddings)[0]
+        top_results = torch.topk(cos_scores, k = 1)
+        best_match_index = top_results[1]
+        best_match_embedding = self.movies_embeddings[best_match_index]
+
+        return best_match_index, best_match_embedding
+
+    def predict(self, context, model_input):
+
+        search_query = model_input["search_query"]
+        top_k = 10
+
+        best_match_index, best_match_embedding = self._get_best_match(search_query)
+        cos_scores = util.cos_sim(best_match_embedding, self.movies_embeddings)[0]
+        top_results = torch.topk(cos_scores, k = top_k)
+
+        idx = top_results[1].detach().numpy()
+        idx = [item for item in idx if item != best_match_index]
+        df_results = self.movies_df.loc[idx, ["title", "extract", "thumbnail", "genres", "year"]]
+        df_results["score"] = top_results[0].detach().numpy()[:len(idx)]
+
+        return json.loads(df_results.to_json(orient = "records"))
+
+# COMMAND ----------
+
+# DBTITLE 1,Quickly Testing the MLflow Model
+def test_prediction():
+
+    class Context(object):
+        pass
+
+    context = Context()
+    context.artifacts = {
+        "movies_embeddings": "/tmp/embeddings.pt",
+        "movies_df": "/tmp/movies.json"
+    }
+
+    recommendation_model = MovieRecommendationModel()
+    model_input = {"search_query": "batman"}
+
+    recommendation_model.load_context(context = context)
+    pred = recommendation_model.predict(context = context, model_input = model_input)
+    return pred
+
+test_prediction()
+
+# COMMAND ----------
+
+torch.save(torch.tensor(movie_embeddings), "/tmp/embeddings.pt")
+df_clean.to_json("/tmp/movies.json", orient = "records")
+
+with mlflow.start_run() as run:
+  mlflow.pyfunc.log_model(
+    artifacts = {
+        "movies_embeddings": "/tmp/embeddings.pt",
+        "movies_df": "/tmp/movies.json"
+    },
+    artifact_path = "recommendation_model",
+    python_model = MovieRecommendationModel(),
+    pip_requirements = [
+        "sentence-transformers",
+        "torch"
+    ]
+)
 
 # COMMAND ----------
 

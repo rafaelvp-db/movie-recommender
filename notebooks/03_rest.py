@@ -103,9 +103,9 @@ headers = {
 }
 
 response = requests.get(
-    url=f"{API_ROOT}/api/2.0/preview/serving-endpoints/{endpoint_name}",
-    json=data,
-    headers=headers
+    url = f"{API_ROOT}/api/2.0/preview/serving-endpoints/{endpoint_name}",
+    json = data,
+    headers = headers
 )
 
 print(response.status_code, response.text)
@@ -123,17 +123,11 @@ print(response.status_code, response.text)
 
 import random
 import uuid
+import json
 
 data = {
-    "dataframe_records":[ # TODO: add model inputs here (you can use an input format other than "dataframe_records" if you want)
-        {
-            "sepal length (cm)": random.random() * 10,
-            "sepal width (cm)": random.random() * 10,
-            "petal length (cm)": random.random() * 10,
-            "petal width (cm)": random.random() * 10
-        }
-    ],
-    "inference_id": str(uuid.uuid4()) # TODO: add an optional inference id to your request to be logged in your Inference Table
+    "instances": [{"search_query": "stanley kubrick"}],
+    "inference_id": str(uuid.uuid4())
 }
 
 headers = {
@@ -146,8 +140,7 @@ response = requests.post(
     headers=headers
 )
 
-print("Response status:", response.status_code)
-print("Reponse text:", response.text)
+print("Reponse text:", json.dumps(response.json()["predictions"]))
 
 # COMMAND ----------
 
@@ -163,7 +156,13 @@ print("Reponse text:", response.text)
 from pyspark.sql import SparkSession
 spark = SparkSession.builder.getOrCreate()
 df = spark.sql(f"select * from delta.`{dbfs_table_path}/{endpoint_name}` limit 1000")
-df.show()
+display(df)
+
+# COMMAND ----------
+
+from pyspark.sql import functions as F
+
+display(df_exploded.withColumn("query", ))
 
 # COMMAND ----------
 
